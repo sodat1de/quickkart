@@ -1,6 +1,7 @@
 # QuickKart Architecture
 
 > **Version 0.1 – covers Milestone 1 (Docker Compose) and forward‑looking notes for Milestones 2‑3.**
+> **Version 0.1.1 – Milestone 1 delivered (Docker Compose); Milestones 2-3 notes unchanged**
 
 ---
 
@@ -62,6 +63,34 @@ flowchart LR
 * Bridge network `quickkart_default` – services discover each other by container name.
 * Volumes `user‑data`, `product‑data`, `order‑data` persist SQLite files.
 * Healthcheck (✔) – `curl -f http://localhost:PORT/healthz`.
+
+#### Local Testing (PowerShell Example)
+
+```powershell
+# Check health endpoints
+curl http://localhost:8000/healthz
+curl http://localhost:8002/healthz
+
+# Register a user
+curl -Method Post -ContentType 'application/json' `
+     -Body '{"email":"alice@example.com","password":"secret"}' `
+     http://localhost:8000/register
+
+# Log in and capture JWT
+$token = (Invoke-RestMethod -Method Post -ContentType 'application/json' `
+          -Body '{"email":"alice@example.com","password":"secret"}' `
+          -Uri  http://localhost:8000/login).access_token
+
+# Place an order (validates JWT with user-svc)
+Invoke-RestMethod -Method Post -ContentType 'application/json' `
+     -Headers @{ Authorization = "Bearer $token" } `
+     -Body '{"item":"USB-C cable"}' `
+     -Uri  http://localhost:8002/orders
+
+# List all orders for current user
+Invoke-RestMethod -Headers @{ Authorization = "Bearer $token" } `
+     http://localhost:8002/orders
+```
 
 ### 4.2 Kubernetes (Milestone 2)
 
