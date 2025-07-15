@@ -1,7 +1,5 @@
 # QuickKart Architecture
 
-> **Version 0.1 – covers Milestone 1 (Docker Compose) and forward‑looking notes for Milestones 2‑3.**
-> **Version 0.1.1 – Milestone 1 delivered (Docker Compose); Milestones 2-3 notes unchanged**
 
 ---
 
@@ -27,10 +25,10 @@
 | ---------------------- | -------------------------- | ------------------- | --------------------------------- |
 | **user‑svc** (8000)    | register / login / profile | `users.db` (SQLite) | —                                 |
 | **product‑svc** (8001) | manage catalog items       | `products.db`       | —                                 |
-| **order‑svc** (8002)   | convert cart ➜ order       | `orders.db`         | user‑svc, product‑svc, notify‑svc |
+| **order‑svc** (8002)   | convert cart → order       | `orders.db`         | user‑svc, product‑svc, notify‑svc |
 | **notify‑svc** (8010)  | send e‑mail                | — (stateless)       | SMTP via MailHog                  |
 
-Each DB lives on a Compose **named volume** or a k8s `emptyDir` for demo; upgrading to Postgres is one env‑var swap thanks to SQLAlchemy.
+Each DB is mounted on a Compose named volume; swapping to Postgres requires only an env‑var change via SQLAlchemy.
 
 ---
 
@@ -52,7 +50,6 @@ flowchart LR
   N --> MH[(MailHog SMTP)]
 ```
 
-*Dashed box shows optional FastAPI “gateway” that can enforce auth/rate‑limit later; we skip it in Part 1 for simplicity.*
 
 ---
 
@@ -60,39 +57,40 @@ flowchart LR
 
 ### 4.1 Docker Compose (Milestone 1)
 
-* Bridge network `quickkart_default` – services discover each other by container name.
-* Volumes `user‑data`, `product‑data`, `order‑data` persist SQLite files.
-* Healthcheck (✔) – `curl -f http://localhost:PORT/healthz`.
+* `quickkart_default` network for service discovery
+* Named volumes: `user-data`, `product-data`, `order-data`
+* Healthcheck endpoints: `/healthz`
 
-#### Local Testing (PowerShell Example)
+#### Local Testing (PowerShell)
 
 ```powershell
-# Check health endpoints
-curl http://localhost:8000/healthz
-curl http://localhost:8002/healthz
+# 0: Health Checks
+Invoke-RestMethod http://localhost:8000/healthz
+Invoke-RestMethod http://localhost:8001/healthz
+Invoke-RestMethod http://localhost:8002/healthz
+Invoke-RestMethod http://localhost:8010/healthz
 
-# Register a user
-curl -Method Post -ContentType 'application/json' `
-     -Body '{"email":"alice@example.com","password":"secret"}' `
-     http://localhost:8000/register
+# 1: Add Product
+$body = @{ name="USB‑C cable"; description="1 m braided"; price=9.99 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8001/products -Headers @{"Content-Type"="application/json"} -Body $body
 
-# Log in and capture JWT
-$token = (Invoke-RestMethod -Method Post -ContentType 'application/json' `
-          -Body '{"email":"alice@example.com","password":"secret"}' `
-          -Uri  http://localhost:8000/login).access_token
+# 2: Register & Login
+$creds = @{ email="alice@example.com"; password="secret" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/register -Headers @{"Content-Type"="application/json"} -Body $creds
+$token = (Invoke-RestMethod -Method Post -Uri http://localhost:8000/login -Headers @{"Content-Type"="application/json"} -Body $creds).access_token
 
-# Place an order (validates JWT with user-svc)
-Invoke-RestMethod -Method Post -ContentType 'application/json' `
-     -Headers @{ Authorization = "Bearer $token" } `
-     -Body '{"item":"USB-C cable"}' `
-     -Uri  http://localhost:8002/orders
+# 3: Place Order
+$order = @{ item="USB‑C cable" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8002/orders -Headers @{"Authorization"="Bearer $token"; "Content-Type"="application/json"} -Body $order
 
-# List all orders for current user
-Invoke-RestMethod -Headers @{ Authorization = "Bearer $token" } `
-     http://localhost:8002/orders
+# 4: List Orders
+Invoke-RestMethod -Uri http://localhost:8002/orders -Headers @{ Authorization = "Bearer $token" }
+
+# 5: MailHog UI
+# Browse http://localhost:8025 to see notification emails
 ```
 
-### 4.2 Kubernetes (Milestone 2)
+### 4.2 Kubernetes (Milestone 2 – upcoming)
 
 | Resource          | Pattern                                          |
 | ----------------- | ------------------------------------------------ |
@@ -100,44 +98,44 @@ Invoke-RestMethod -Headers @{ Authorization = "Bearer $token" } `
 | **Service**       | ClusterIP (internals), NodePort (front‑door)     |
 | **ConfigMap**     | env defaults (PORT, DB\_URL)                     |
 | **Secret**        | JWT secret, SMTP creds                           |
-| **HPA**           | product‑svc: CPU 70% target, min1/max5           |
+| **HPA**           | product‑svc: CPU 70% target, min1/max5           |
 | **NetworkPolicy** | deny‑all → allow same‑ns intra‑svc               |
 | **RBAC**          | read‑only Prometheus ServiceAccount              |
 
-Prometheus Operator is installed via `kube-prometheus-stack` manifest; Grafana dashboard JSON is pre‑imported.
+Prometheus operator via `kube-prometheus-stack`; Grafana dashboard pre‑imported.
 
 ---
 
 ## 5 Data Management Strategy
 
-* **Database‑per‑service** maximises autonomy → aligns with polyglot persistence principle.
-* Local dev uses SQLite to avoid Dockerising Postgres; CI runs the same.
-* Migrations handled by Alembic (generates `.sql` even for SQLite for consistency).
+* Database‑per‑service → autonomy (polyglot persistence)
+* SQLite for local dev & CI; swap to Postgres by changing DB URL
+* Alembic for migrations (even on SQLite)
 
 ---
 
 ## 6 Communication Patterns
 
-1. **Synchronous REST** (JSON/HTTP) — simple, easiest to debug.
-2. **Eventual upgrade path**: If time permits, Order → Notification could be made asynchronous via RabbitMQ; for now an HTTP POST suffices.
+1. **Synchronous REST** (JSON/HTTP) – easy debug
+2. **Future**: RabbitMQ for async Order → Notification (stretch)
 
 ---
 
 ## 7 Observability Plan
 
-| Concern     | Implementation                                         |
-| ----------- | ------------------------------------------------------ |
-| **Metrics** | FastAPI `/metrics` ➜ Prometheus scrape                 |
-| **Tracing** | (stretch) OpenTelemetry SDK exporting to Grafana Tempo |
-| **Logs**    | `uvicorn` STDOUT → Fluent Bit → Loki                   |
+| Concern | Implementation                          |
+| ------- | --------------------------------------- |
+| Metrics | FastAPI `/metrics` → Prometheus scrape  |
+| Tracing | (stretch) OpenTelemetry → Grafana Tempo |
+| Logs    | `uvicorn` STDOUT → Fluent Bit → Loki    |
 
 ---
 
 ## 8 Security Notes
 
-* **JWT** (HS256) with 15‑min access, 7‑day refresh.
-* Secrets mounted from k8s `Secret` or `.env` in Compose; never committed.
-* Dockerfiles use non‑root UID 1001 and `--cap-drop ALL`.
+* JWT (HS256): 15 min access, 7 day refresh
+* Secrets via k8s `Secret` or `.env` (not committed)
+* Dockerfiles drop root (`UID 1001`) & `--cap-drop ALL`
 
 ---
 
@@ -145,23 +143,23 @@ Prometheus Operator is installed via `kube-prometheus-stack` manifest; Grafana d
 
 ```mermaid
 graph TD
-  commit["Push / PR"] --> ci["CI – GitHub Actions"]
+  commit("Push/PR") --> ci[CI – GitHub Actions]
   ci --> test[pytest + ruff]
-  ci --> build[docker buildx bake] --> registry[local ghcr]
+  ci --> build[docker buildx bake] --> registry[ghcr]
   ci --> deploy[kubectl apply --context=minikube]
 ```
 
-> Local cluster credentials are configured in a GitHub Actions self‑hosted runner (course requirement allows local).
+> Local cluster creds in self‑hosted runner (course requirement).
 
 ---
 
 ## 10 Future Extensions
 
-* API Gateway to unify endpoints & handle rate limiting.
-* Switch SQLite ➜ Postgres with minimal env change.
-* RabbitMQ event bus for async order fulfillment.
-* Front‑end: lightweight React / SvelteKit consuming gateway only.
-* Payment Service stub integrating Stripe test keys.
+* API Gateway for unified auth & rate‑limit
+* Switch SQLite → Postgres via env swap
+* RabbitMQ event bus for async workflows
+* Front‑end: React/SvelteKit consuming a gateway only
+* Payment Service stub (Stripe test keys)
 
 ---
 
