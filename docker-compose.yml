@@ -1,35 +1,78 @@
 version: "3.9"
 
+volumes:
+  user-data:
+  product-data:
+  order-data:
+
+networks:
+  quickkart:        # single private bridge for the whole stack
+    driver: bridge
+
 services:
+  # ──────────────── Core APIs ────────────────
   user-svc:
     build: ./user_svc
-    container_name: user-svc
     env_file: ./user_svc/.env
     volumes:
-      - user-data:/data       # stores users.db
-    ports:
-      - "8000:8000"
+      - user-data:/data
+    ports: ["8000:8000"]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 10s
       retries: 3
+    networks: [quickkart]
+
+  product-svc:
+    build: ./product_svc
+    env_file: ./product_svc/.env
+    volumes:
+      - product-data:/data
+    ports: ["8001:8000"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 10s
+      retries: 3
+    networks: [quickkart]
 
   order-svc:
     build: ./order_svc
-    container_name: order-svc
     env_file: ./order_svc/.env
     volumes:
-      - order-data:/data      # stores orders.db
-    ports:
-      - "8002:8000"
+      - order-data:/data
+    ports: ["8002:8000"]
     depends_on:
-      user-svc:
-        condition: service_healthy
+      user-svc:    { condition: service_healthy }
+      product-svc: { condition: service_healthy }
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 10s
       retries: 3
+    networks: [quickkart]
 
-volumes:
-  user-data:
-  order-data:
+  notify-svc:
+    build: ./notify_svc
+    env_file: ./notify_svc/.env
+    environment:
+      - MAILHOG_HOST=mailhog
+    depends_on:
+      - mailhog
+    ports: ["8010:8010"]     # ← published for local testing
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/healthz"]
+      interval: 10s
+      retries: 3
+    networks: [quickkart]
+
+  # ──────────────── Infra helper ────────────────
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP
+    restart: unless-stopped
+    networks: [quickkart]
