@@ -45,7 +45,7 @@ async def make_order(order_in: schemas.OrderCreate,
                      email: str = Depends(get_current_user_email),
                      db: Session = Depends(get_db)):
     # validate product exists
-    if not client.product_exists(order_in.item):
+    if not await client.product_exists(order_in.item):
         raise HTTPException(status_code=404, detail="Item not in catalog")
 
     order = crud.create_order(db, email, order_in)

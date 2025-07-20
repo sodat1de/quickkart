@@ -11,10 +11,11 @@ async def validate_jwt(token: str):
         r.raise_for_status()
         return r.json()
 
-def product_exists(item: str):
-    r = httpx.get(f"{PRODUCT_SVC_URL}/products")
-    r.raise_for_status()
-    return any(p["name"] == item for p in r.json())
+async def product_exists(item: str) -> bool:
+    async with httpx.AsyncClient() as c:
+        r = await c.get(f"{PRODUCT_SVC_URL}/products", timeout=5)
+        r.raise_for_status()
+        return any(p["name"] == item for p in r.json())
 
 async def email_confirmation(user_email: str, item: str):
     async with httpx.AsyncClient() as c:
