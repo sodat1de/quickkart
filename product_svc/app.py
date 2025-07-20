@@ -1,10 +1,12 @@
 from fastapi import Depends, FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy.orm import Session
 
 import crud, database, models, schemas
 
 models.Base.metadata.create_all(bind=database.engine)
 app = FastAPI(title="QuickKart Product Service")
+Instrumentator().instrument(app).expose(app)
 
 def get_db():
     db = database.SessionLocal()
