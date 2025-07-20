@@ -1,10 +1,11 @@
 import asyncio
+
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy.orm import Session
 
-import client, crud, database, models, schemas
+from . import client, crud, database, models, schemas
 
 models.Base.metadata.create_all(bind=database.engine)
 

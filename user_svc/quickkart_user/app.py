@@ -1,10 +1,10 @@
-import os
-from fastapi import Depends, FastAPI, HTTPException, status, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy.orm import Session
 
-import auth, crud, database, models, schemas
+from . import auth, crud, database, models, schemas
 
 models.Base.metadata.create_all(bind=database.engine)
 

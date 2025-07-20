@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-import models, schemas
+
+from . import models, schemas
 
 
 def create_order(db: Session, user_email: str, order_in: schemas.OrderCreate):

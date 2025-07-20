@@ -1,6 +1,8 @@
 from fastapi import FastAPI, BackgroundTasks
+
 from prometheus_fastapi_instrumentator import Instrumentator
-import emailer
+
+from . import emailer
 
 app = FastAPI(title="QuickKart Notification Service")
 Instrumentator().instrument(app).expose(app)

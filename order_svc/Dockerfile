@@ -14,6 +14,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache /wheels/*
-COPY . .
+COPY quickkart_order/ ./quickkart_order/
 EXPOSE 8000
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "quickkart_order.app:app", "--host", "0.0.0.0", "--port", "8000"]

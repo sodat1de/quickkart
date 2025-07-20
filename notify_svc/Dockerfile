@@ -9,6 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 WORKDIR /app
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache /wheels/*
-COPY . .
+COPY quickkart_notify/ ./quickkart_notify/
 EXPOSE 8010
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8010"]
+CMD ["uvicorn", "quickkart_notify.app:app", "--host", "0.0.0.0", "--port", "8010"]
