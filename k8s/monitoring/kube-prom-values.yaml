@@ -1,0 +1,9 @@
+grafana:
+  service:
+    type: NodePort
+    nodePort: 30080    # browse http://localhost:30080
+  adminPassword: quickkart
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-svc-env
+  namespace: quickkart
+data:
+  USER_SERVICE_URL:    http://user-svc.quickkart.svc.cluster.local:8000
+  PRODUCT_SERVICE_URL: http://product-svc.quickkart.svc.cluster.local:8000
+  NOTIFY_SERVICE_URL:  http://notify-svc.quickkart.svc.cluster.local:8010

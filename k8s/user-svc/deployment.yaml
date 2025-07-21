@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-svc
+  namespace: quickkart
+  labels: { app: user-svc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: user-svc } }
+  template:
+    metadata:
+      labels: { app: user-svc }
+    spec:
+      volumes:
+      - name: data
+        emptyDir: {}  
+      containers:
+      - name: user-svc
+        image: user-svc:latest
+        imagePullPolicy: IfNotPresent
+        ports: [{ containerPort: 8000 }]
+        volumeMounts:
+        - name: data
+          mountPath: /data  
+        env:
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef: { name: user-svc-secret, key: JWT_SECRET }
+        - { name: ACCESS_TOKEN_EXPIRE_MINUTES, value: "15" }
+        readinessProbe: { httpGet: { path: /healthz, port: 8000 }, initialDelaySeconds: 5 }
+        livenessProbe:  { httpGet: { path: /healthz, port: 8000 }, initialDelaySeconds: 5 }

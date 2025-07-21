@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-svc
+  namespace: quickkart
+  labels: { app: user-svc }
+  annotations:      # Prometheus scrape
+    prometheus.io/scrape: "true"
+    prometheus.io/path:   /metrics
+    prometheus.io/port:   "8000"
+spec:
+  selector: { app: user-svc }
+  ports:
+  - port: 8000
+    targetPort: 8000
