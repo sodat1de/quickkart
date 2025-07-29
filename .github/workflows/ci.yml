@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install test dependencies
+      run: |
+        pip install pytest httpx pytest-asyncio
+        pip install pytest httpx pytest-asyncio PyJWT
+        pip install -r product_svc/requirements.txt
+        pip install -r user_svc/requirements.txt
+
+    - name: Unit tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/product_svc:${{ github.workspace }}/user_svc
+      run: pytest product_svc/tests/unit user_svc/tests/unit
+
+    - name: Populate service env files
+      run: |
+        # If you have .env.example in each service, copy it.
+        for svc in user_svc product_svc order_svc notify_svc; do
+          if [ -f $svc/.env.example ]; then
+            cp $svc/.env.example $svc/.env
+          else
+            # otherwise emit a minimal empty file so docker-compose doesn't error
+            touch $svc/.env
+          fi
+        done
+
+    - name: Integration test (compose)
+      run: |
+        docker compose up -d --build
+
+        for port in 8000 8001 8002 8010; do
+          until curl -s -f http://localhost:$port/healthz; do
+            echo "Waiting for service on port $port..."
+            sleep 1
+          done
+        done
+
+        pytest order_svc/tests/integration
+        docker compose logs --no-color > compose.log
+        docker compose down
+
+    - name: Attach compose logs
+      uses: actions/upload-artifact@v4
+      with:
+        name: compose-logs
+        path: compose.log
+
+  build-push:
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build & push images
+      run: |
+        for svc in user_svc product_svc order_svc notify_svc; do
+          docker build -t ghcr.io/${{ github.repository }}/$svc:sha-${{ github.sha }} ./$svc
+          docker push ghcr.io/${{ github.repository }}/$svc:sha-${{ github.sha }}
+        done
+
+    - name: Deploy to K8s (optional)
+      run: |
+        kubectl apply -f k8s || true

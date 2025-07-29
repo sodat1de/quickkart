@@ -76,3 +76,13 @@ services:
       - "1025:1025"   # SMTP
     restart: unless-stopped
     networks: [quickkart]
+
+  # loki:
+  #   image: grafana/loki:3.0.0
+  #   ports: ["3100:3100"]
+  #   command: -config.file=/etc/loki/config.yaml
+  # promtail:
+  #   image: grafana/promtail:3.0.0
+  #   volumes:
+  #     - /var/log:/var/log
+  #   command: -config.expand-env=true -config.file=/etc/promtail/config.yml
